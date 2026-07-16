@@ -1,6 +1,13 @@
 # License Plate Detection & Anonymization
 
-A YOLOv8-based pipeline that detects license plates in images and blurs them out, with the blur quality checked using OCR instead of just eyeballing it. Also handles dataset cleanup, model export to ONNX, and flagging low-confidence detections for review
+
+## The problem
+
+Organizations that collect street-level or dashcam imagery (parking systems, traffic monitoring, mapping) often can't share or store that data freely because license plates are personally identifiable information in most jurisdictions. Manually blurring plates doesn't scale. This project automates that: detect every plate in an image and blur it, with a way to actually confirm the blur worked rather than assuming it did.
+
+## Overview
+
+A YOLOv8-based pipeline that detects license plates in images and blurs them out, with the blur quality checked using OCR instead of just eyeballing it. Also handles dataset cleanup, model export to ONNX, and flagging low-confidence detections for review. Includes an untested function for batch-processing images from a GCS bucket.
 
 ## What it does
 
@@ -10,6 +17,7 @@ A YOLOv8-based pipeline that detects license plates in images and blurs them out
 - Runs inference and blurs any detected plates with Gaussian blur
 - Verifies the blur actually worked by running OCR on the plate region before and after — if Tesseract can still read text after blurring, that's a failure
 - Exports the trained model to ONNX for deployment outside of a Python/PyTorch environment
+- Includes a function to pull images from a GCS bucket, process them, and write anonymized versions to another bucket — written but never run against a real bucket, so unverified
 - Flags detections below a confidence threshold so they can be reviewed and added back into training later
 - Benchmarks inference latency and throughput
 
@@ -99,3 +107,7 @@ stats = batch_anonymize_images(
 
 - `License_Plate_Detection.ipynb` — the full pipeline, from dataset audit through benchmarking
 - `dataset.yaml` — YOLO dataset config
+
+## Notes
+
+The OCR verification step is the part I'd call out — it's easy to blur a region and assume privacy is handled, but actually running text extraction on the blurred region and confirming it fails gives you a number you can report, rather than a guess.
