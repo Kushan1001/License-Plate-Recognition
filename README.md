@@ -1,6 +1,6 @@
 # License Plate Detection & Anonymization
 
-A YOLOv8-based pipeline that detects license plates in images and blurs them out, with the blur quality checked using OCR instead of just eyeballing it. Also handles dataset cleanup, model export to ONNX, batch processing from Google Cloud Storage, and flagging low-confidence detections for review.
+A YOLOv8-based pipeline that detects license plates in images and blurs them out, with the blur quality checked using OCR instead of just eyeballing it. Also handles dataset cleanup, model export to ONNX, and flagging low-confidence detections for review. Includes an untested function for batch-processing images from a GCS bucket.
 
 ## What it does
 
@@ -10,7 +10,7 @@ A YOLOv8-based pipeline that detects license plates in images and blurs them out
 - Runs inference and blurs any detected plates with Gaussian blur
 - Verifies the blur actually worked by running OCR on the plate region before and after — if Tesseract can still read text after blurring, that's a failure
 - Exports the trained model to ONNX for deployment outside of a Python/PyTorch environment
-- Can pull images straight from a GCS bucket, process them, and write the anonymized versions to another bucket
+- Includes a function to pull images from a GCS bucket, process them, and write anonymized versions to another bucket — written but never run against a real bucket, so unverified
 - Flags detections below a confidence threshold so they can be reviewed and added back into training later
 - Benchmarks inference latency and throughput
 
@@ -43,7 +43,7 @@ Anonymization:
 - 402 plates detected across 386 test images, 0 failed
 - 100% of blurred plates came back unreadable when checked with OCR
 
-Exported model: 5.9 MB (.pt) / 11.7 MB (.onnx)
+Exported model: 5.9 MB (.pt) / 11.7 MB (.onnx). Note: the ONNX export is produced but not separately benchmarked in this notebook — no inference was run against it to compare speed or accuracy vs. the PyTorch model.
 
 Note: 5 epochs is low — this was run as a proof of concept for the full pipeline rather than a push for best possible accuracy. With more epochs and a larger backbone (e.g. yolov8s/m) these numbers would likely improve.
 
@@ -55,7 +55,7 @@ raw dataset
   -> train YOLOv8n (SGD, cosine LR, AMP)
   -> evaluate on test set
   -> inference: detect -> blur -> verify with OCR
-  -> export to ONNX / run on GCS bucket / flag low-confidence detections
+  -> export to ONNX / GCS batch function (untested) / flag low-confidence detections
   -> benchmark latency & throughput
 ```
 
@@ -100,7 +100,3 @@ stats = batch_anonymize_images(
 
 - `License_Plate_Detection.ipynb` — the full pipeline, from dataset audit through benchmarking
 - `dataset.yaml` — YOLO dataset config
-
-## Notes
-
-The OCR verification step is the part I'd call out — it's easy to blur a region and assume privacy is handled, but actually running text extraction on the blurred region and confirming it fails gives you a number you can report, rather than a guess.
