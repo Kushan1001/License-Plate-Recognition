@@ -1,66 +1,20 @@
-# License-Plate-Recognition
-An end-to-end computer vision system that detects vehicle license plates with YOLOv8 and automatically anonymizes them for privacy-compliant image/video processing — built with production deployment in mind, not just a training notebook.
+# License Plate Detection & Anonymization
 
-## 📌 Overview
+A YOLOv8-based pipeline that detects license plates in images and blurs them out, with the blur quality checked using OCR instead of just eyeballing it. Also handles dataset cleanup, model export to ONNX, batch processing from Google Cloud Storage, and flagging low-confidence detections for review.
 
-This project implements a full computer vision pipeline that goes beyond "train a model and stop." It covers **data validation, training, evaluation, privacy-preserving inference, quality verification, edge deployment, cloud integration, and continuous learning** — the components that separate a research notebook from a system that could actually run in production.
+## What it does
 
-**Core use case:** detect license plates in images and blur them automatically, enabling organizations to process and share visual data (dashcam footage, street imagery, parking systems, etc.) while staying privacy-compliant.
+- Audits the dataset before training — checks that every image has a matching label file and removes anything that doesn't
+- Trains a YOLOv8n model to detect license plates
+- Evaluates on a held-out test set (mAP, precision, recall)
+- Runs inference and blurs any detected plates with Gaussian blur
+- Verifies the blur actually worked by running OCR on the plate region before and after — if Tesseract can still read text after blurring, that's a failure
+- Exports the trained model to ONNX for deployment outside of a Python/PyTorch environment
+- Can pull images straight from a GCS bucket, process them, and write the anonymized versions to another bucket
+- Flags detections below a confidence threshold so they can be reviewed and added back into training later
+- Benchmarks inference latency and throughput
 
-## ✨ Key Features
-
-| Stage | What it does |
-|---|---|
-| 🔍 **Dataset Auditing** | Validates image/label counts per split, detects and removes orphaned files (images without labels or vice versa) |
-| 🎯 **Object Detection** | Fine-tunes a YOLOv8 model on a custom license plate dataset |
-| 📊 **Model Evaluation** | Computes mAP@50, mAP@50-95, precision, and recall on a held-out test set |
-| 🔒 **Privacy Anonymization** | Detects and Gaussian-blurs license plates in single images or batches, with confidence-threshold control |
-| ✅ **Blur Verification** | Uses OCR (Tesseract) to programmatically confirm plates are unreadable post-blur — a quantifiable privacy guarantee, not just a visual check |
-| 🖼️ **Before/After Visualization** | Side-by-side comparison plots of original vs. anonymized output |
-| 📦 **Edge Deployment** | Exports the trained model to **ONNX** for lightweight, cross-platform inference |
-| ☁️ **Cloud Integration** | Batch-processes images directly from a **Google Cloud Storage** bucket to another, end-to-end |
-| 🔁 **Continuous Learning Loop** | Flags low-confidence detections for human review, enabling active-learning-style dataset improvement |
-| ⚡ **Performance Benchmarking** | Measures inference latency, FPS, and throughput for capacity planning |
-
-## 🏗️ Pipeline Architecture
-
-```
-Raw Dataset
-    │
-    ▼
-Data Audit & Cleaning  →  removes mismatched image/label pairs
-    │
-    ▼
-YOLOv8 Training  →  custom-configured (SGD, cosine LR, AMP, early stopping)
-    │
-    ▼
-Evaluation  →  mAP@50 / mAP@50-95 / Precision / Recall
-    │
-    ▼
-Inference  →  detect plates → Gaussian blur → verify with OCR
-    │
-    ├──▶ ONNX Export (edge deployment)
-    ├──▶ GCS Batch Processing (cloud pipeline)
-    └──▶ Low-Confidence Flagging (continuous learning)
-    │
-    ▼
-Latency & Throughput Benchmarking
-```
-
-## 🛠️ Tech Stack
-
-- **Detection:** YOLOv8 (Ultralytics)
-- **Image Processing:** OpenCV, PIL
-- **OCR Verification:** Tesseract (pytesseract)
-- **Deployment:** ONNX export for edge/cross-platform inference
-- **Cloud:** Google Cloud Storage (`google-cloud-storage`)
-- **Tooling:** NumPy, Matplotlib, tqdm, YAML
-
-## 📈 Results
-
-Model: **YOLOv8n**, trained for 5 epochs on the custom dataset below, evaluated on a held-out 386-image test set (Tesla T4 GPU).
-
-### Dataset
+## Dataset
 
 | Split | Images | Labels |
 |---|---|---|
@@ -68,62 +22,64 @@ Model: **YOLOv8n**, trained for 5 epochs on the custom dataset below, evaluated 
 | Val | 1,073 | 1,073 |
 | Test | 386 | 386 |
 
-*(0 mismatched image/label pairs found after the audit step.)*
+No mismatched image/label pairs after cleaning.
 
-### Detection Performance (test set)
+## Results
 
-| Metric | Value |
-|---|---|
-| mAP@50 | **0.877** |
-| mAP@50-95 | **0.619** |
-| Precision | **0.919** |
-| Recall | **0.832** |
+Trained YOLOv8n for 5 epochs on a Tesla T4, evaluated on the 386-image test set.
 
-### Inference Speed (Tesla T4, 640×640, benchmarked over 100 runs)
+Detection (test set):
+- mAP@50: 0.877
+- mAP@50-95: 0.619
+- Precision: 0.919
+- Recall: 0.832
 
-| Metric | Value |
-|---|---|
-| Mean latency | **8.05 ms** |
-| Median latency | 7.69 ms |
-| Min / Max latency | 7.30 ms / 16.87 ms |
-| Throughput | **124.3 FPS** |
-| Scalability | **~447,000 images/hour** |
+Inference speed (640x640, T4, averaged over 100 runs):
+- Mean latency: 8.05 ms
+- Median: 7.69 ms
+- Throughput: ~124 FPS (~447k images/hour)
 
-### Anonymization Quality
+Anonymization:
+- 402 plates detected across 386 test images, 0 failed
+- 100% of blurred plates came back unreadable when checked with OCR
 
-| Metric | Value |
-|---|---|
-| Test images processed | 386 |
-| License plates detected | 402 |
-| Failed detections | 0 |
-| OCR-verified blur success rate | **100%** (plates unreadable post-blur) |
+Exported model: 5.9 MB (.pt) / 11.7 MB (.onnx)
 
-### Model Export
+Note: 5 epochs is low — this was run as a proof of concept for the full pipeline rather than a push for best possible accuracy. With more epochs and a larger backbone (e.g. yolov8s/m) these numbers would likely improve.
 
-| Format | Size |
-|---|---|
-| PyTorch (best.pt) | 5.9 MB |
-| ONNX (opset 20, simplified) | 11.7 MB |
+## Pipeline
 
-## 🚀 Getting Started
+```
+raw dataset
+  -> audit & remove mismatched files
+  -> train YOLOv8n (SGD, cosine LR, AMP)
+  -> evaluate on test set
+  -> inference: detect -> blur -> verify with OCR
+  -> export to ONNX / run on GCS bucket / flag low-confidence detections
+  -> benchmark latency & throughput
+```
 
-### Installation
+## Stack
+
+Python, Ultralytics YOLOv8, OpenCV, Tesseract (pytesseract), ONNX, google-cloud-storage
+
+## Usage
+
+Install:
 ```bash
 pip install ultralytics pytesseract opencv-python google-cloud-storage
 ```
 
-### Train
+Train:
 ```python
 from ultralytics import YOLO
 
 model = YOLO('yolov8n.pt')
-model.train(data='dataset.yaml', epochs=5, imgsz=640, device=0)  # bump epochs for production training
+model.train(data='dataset.yaml', epochs=5, imgsz=640, device=0)
 ```
 
-### Run Anonymization
+Blur plates in one image:
 ```python
-from anonymize import detect_and_blur_license_plates
-
 anonymized_img, detections = detect_and_blur_license_plates(
     image_path="input.jpg",
     model=model,
@@ -131,10 +87,8 @@ anonymized_img, detections = detect_and_blur_license_plates(
 )
 ```
 
-### Batch Process a Directory
+Batch process a folder:
 ```python
-from anonymize import batch_anonymize_images
-
 stats = batch_anonymize_images(
     input_dir="images/raw",
     output_dir="images/anonymized",
@@ -142,20 +96,11 @@ stats = batch_anonymize_images(
 )
 ```
 
-## 📁 Project Structure
-```
-├── License_Plate_Detection.ipynb   # Full pipeline: audit → train → evaluate → deploy
-├── dataset.yaml                    # YOLO dataset config
-└── README.md
-```
+## Files
 
-## 🎯 Why This Project Matters
+- `License_Plate_Detection.ipynb` — the full pipeline, from dataset audit through benchmarking
+- `dataset.yaml` — YOLO dataset config
 
-Most license plate detection projects stop at "the model works on a test image." This one treats detection as one component of a **privacy-preserving data pipeline**: it validates its own inputs, quantifies whether anonymization actually succeeded (via OCR, not eyeballing), exports for real-world deployment, integrates with cloud storage, and builds in a feedback loop for improving the model over time.
+## Notes
 
-## 📬 Contact
-
-Feel free to reach out if you'd like to discuss this project, computer vision, or opportunities!
-
----
-*Built with YOLOv8 and a focus on production-readiness.*
+The OCR verification step is the part I'd call out — it's easy to blur a region and assume privacy is handled, but actually running text extraction on the blurred region and confirming it fails gives you a number you can report, rather than a guess.
