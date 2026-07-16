@@ -1,6 +1,6 @@
 # License Plate Detection & Anonymization
 
-A YOLOv8-based pipeline that detects license plates in images and blurs them out, with the blur quality checked using OCR instead of just eyeballing it. Also handles dataset cleanup, model export to ONNX, and flagging low-confidence detections for review. Includes an untested function for batch-processing images from a GCS bucket.
+A YOLOv8-based pipeline that detects license plates in images and blurs them out, with the blur quality checked using OCR instead of just eyeballing it. Also handles dataset cleanup, model export to ONNX, and flagging low-confidence detections for review
 
 ## What it does
 
@@ -10,7 +10,6 @@ A YOLOv8-based pipeline that detects license plates in images and blurs them out
 - Runs inference and blurs any detected plates with Gaussian blur
 - Verifies the blur actually worked by running OCR on the plate region before and after — if Tesseract can still read text after blurring, that's a failure
 - Exports the trained model to ONNX for deployment outside of a Python/PyTorch environment
-- Includes a function to pull images from a GCS bucket, process them, and write anonymized versions to another bucket — written but never run against a real bucket, so unverified
 - Flags detections below a confidence threshold so they can be reviewed and added back into training later
 - Benchmarks inference latency and throughput
 
